@@ -1,0 +1,174 @@
+<body>
+  <style>
+    body {
+      margin: 0;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+  <script>
+    let platform;
+    let player;
+    let cursors;
+    let arrows;
+    let gameOver = false;
+    let timerText;
+    let gameTime = 0;
+    let gameTimerEvent; // Ссылка на таймер времени игры
+
+    class GameScene extends Phaser.Scene {
+      preload() {
+        this.load.image('sky', 'assets/sky.png');
+        this.load.image('platform', 'assets/platform.png');
+        this.load.spritesheet('player', 'assets/player.png', {
+          frameWidth: 202, frameHeight: 207
+        });
+        this.load.image('arrow', 'assets/arrow.png');
+      }
+
+      create() {
+        // Добавляем фон
+        this.add.image(512, 384, 'sky');
+
+        // Добавляем платформы
+        platform = this.physics.add.staticGroup();
+        platform.create(512, 730, 'platform').setScale(0.9).refreshBody();
+        platform.create(100, 384, 'platform').setScale(0.2).refreshBody();
+        platform.create(900, 384, 'platform').setScale(0.2).refreshBody();
+        platform.create(512, 550, 'platform').setScale(0.2).refreshBody();
+        platform.create(512, 250, 'platform').setScale(0.2).refreshBody();
+
+        // Создаём игрока
+        player = this.physics.add.sprite(100, 600, 'player').setScale(0.5);
+        player.setCollideWorldBounds(true);
+        player.setBounce(0);
+
+        // Создаём анимации игрока
+        this.anims.create({
+          key: 'left',
+          frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }),
+          frameRate: 5,
+          repeat: -1,
+        });
+        this.anims.create({
+          key: 'turn',
+          frames: [{ key: 'player', frame: 3 }],
+          frameRate: 20,
+        });
+        this.anims.create({
+          key: 'right',
+          frames: this.anims.generateFrameNumbers('player', { start: 4, end: 6 }),
+          frameRate: 5,
+          repeat: -1,
+        });
+
+        // Добавляем столкновения
+        this.physics.add.collider(player, platform);
+
+        // Включаем управление через клавиатуру
+        cursors = this.input.keyboard.createCursorKeys();
+
+        // Создаём группу стрел
+        arrows = this.physics.add.group();
+
+        // Таймер времени игры
+        timerText = this.add.text(16, 16, 'Time: 0', { fontSize: '24px', fill: '#000' });
+        gameTimerEvent = this.time.addEvent({
+          delay: 1000, // Обновление каждую секунду
+          loop: true,
+          callback: () => {
+            gameTime++;
+            timerText.setText(`Time: ${gameTime}`);
+          }
+        });
+
+        // Добавляем таймер для появления стрел
+        this.time.addEvent({
+          delay: 5000, // Задержка в 5 секунд
+          loop: true,
+          callback: this.spawnArrows,
+          callbackScope: this
+        });
+
+        // Столкновение игрока со стрелами
+        this.physics.add.overlap(player, arrows, this.hitArrow, null, this);
+      }
+
+      update() {
+        if (gameOver) return;
+
+        if (cursors.left.isDown) {
+          player.setVelocityX(-160);
+          player.anims.play('left', true);
+        } else if (cursors.right.isDown) {
+          player.setVelocityX(160);
+          player.anims.play('right', true);
+        } else {
+          player.setVelocityX(0);
+          player.anims.play('turn');
+        }
+
+        if (cursors.up.isDown && player.body.touching.down) {
+          player.setVelocityY(-330);
+        }
+      }
+
+      spawnArrows() {
+        if (gameOver) return;
+
+        const platformsArray = platform.getChildren();
+        const randomPlatform1 = Phaser.Utils.Array.GetRandom(platformsArray);
+        const randomPlatform2 = Phaser.Utils.Array.GetRandom(platformsArray);
+
+        // Создаём стрелу слева
+        const arrowLeft = arrows.create(0, randomPlatform1.y - Phaser.Math.Between(60, 40), 'arrow');
+        arrowLeft.setVelocityX(400); // Ускоряем стрелу справа налево
+        arrowLeft.setScale(0.5);
+        arrowLeft.body.allowGravity = false;
+
+        // Создаём стрелу справа
+        const arrowRight = arrows.create(1024, randomPlatform2.y - Phaser.Math.Between(60, 40), 'arrow');
+        arrowRight.setVelocityX(-400); // Ускоряем стрелу слева направо
+        arrowRight.setScale(0.5);
+        arrowRight.setFlipX(true); // Отражение текстуры по горизонтали
+        arrowRight.body.allowGravity = false;
+
+        // Удаляем стрелы, когда они выходят за экран
+        arrows.children.iterate((arrow) => {
+          if (arrow && (arrow.x < -50 || arrow.x > 1074)) {
+            arrow.destroy();
+          }
+        });
+      }
+
+      hitArrow(player, arrow) {
+        if (gameOver) return; // Исключаем множественные вызовы
+
+        this.physics.pause();
+        player.setTint(0xff0000);
+        player.anims.play('turn');
+        gameOver = true;
+
+        // Останавливаем таймер игры
+        if (gameTimerEvent) {
+          gameTimerEvent.remove();
+        }
+      }
+    }
+
+    const config = {
+      type: Phaser.AUTO,
+      width: 1024,
+      height: 745,
+      scene: new GameScene(),
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: 300 },
+          debug: false,
+        }
+      }
+    };
+
+    const game = new Phaser.Game(config);
+  </script>
+</body>
